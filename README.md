@@ -1,3 +1,34 @@
+# Xenia Canary Netplay
+
+This is a fork of [Xenia Canary](https://github.com/xenia-canary/xenia-canary) which implements online multiplayer features. The REST API powering this fork can be found [here](https://github.com/AdrianCassar/Xenia-WebServices#xenia-web-services).
+
+Current online sessions are displayed at [https://xenia-netplay-2a0298c0e3f4.herokuapp.com/](https://xenia-netplay-2a0298c0e3f4.herokuapp.com/).
+
+---
+
+## Netplay Wiki
+
+The wiki contains a compatibility list and general information about the current state netplay.
+
+To get started with netplay read [config setup](https://github.com/AdrianCassar/xenia-canary/wiki/Config-Setup).
+
+### Wiki Pages:
+* [Home](https://github.com/AdrianCassar/xenia-canary/wiki)
+* [Netplay Compatibility](https://github.com/AdrianCassar/xenia-canary/wiki/Netplay-Compatibility)
+* [Testing Procedure](https://github.com/AdrianCassar/xenia-canary/wiki/Testing-Procedure)
+* [Config Setup](https://github.com/AdrianCassar/xenia-canary/wiki/Config-Setup)
+* [Systemlink](https://github.com/AdrianCassar/xenia-canary/wiki/Systemlink)
+* [FAQ](https://github.com/AdrianCassar/xenia-canary/wiki/FAQ)
+
+### Netplay Builds:
+* [Latest stable release](https://github.com/AdrianCassar/xenia-canary/releases/latest)
+* [Github Actions](https://github.com/AdrianCassar/xenia-canary/actions?query=actor%3AAdrianCassar+branch%3Anetplay_canary_experimental)
+    * These builds are latest work in progress and require a github account to download.
+* [Mousehook](https://github.com/marinesciencedude/xenia-canary-mousehook/releases?q=Netplay)
+    * A limited number of games have netplay and mousehook support.
+
+---
+
 <p align="center">
     <a href="https://github.com/xenia-canary/xenia-canary/tree/canary_experimental/assets/icon">
         <img height="120px" src="https://raw.githubusercontent.com/xenia-canary/xenia/master/assets/icon/128.png" />
@@ -15,17 +46,6 @@ Please check the [FAQ](https://github.com/xenia-project/xenia/wiki/FAQ) page bef
 We've got jobs/lives/etc, so don't expect instant answers.
 
 Discussing illegal activities will get you banned.
-
-## dbexpirement
-
-dbexperiment is a fork of Xenia Canary that aims to optimize dashboard use as much as possible.
-
-Notes:
-Dashboards' features and functionality are not guaranteed, so do not expect anything to work as expected, since this is for cosmetic purposes only.
-This build is strictly made with dashboard support in mind, so game compatibility is gonna vary, and some might even break.
-
-Credits to @The-Little-Wolf for the code provided in this build.
-[Compatibility](https://docs.google.com/spreadsheets/d/1R4DbWGdugFojU-aP-nKfDTd6XgdvjQh16cNyJ-0UeEA/edit?usp=drivesdk)
 
 ## Status
 

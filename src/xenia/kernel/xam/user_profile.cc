@@ -7,34 +7,162 @@
  ******************************************************************************
  */
 
-#include "xenia/kernel/xam/user_profile.h"
-
 #include <sstream>
 
 #include "third_party/fmt/include/fmt/format.h"
+#include "xenia/base/clock.h"
+#include "xenia/base/cvar.h"
+#include "xenia/base/filesystem.h"
+#include "xenia/base/logging.h"
+#include "xenia/base/mapped_memory.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/util/shim_utils.h"
+#include "xenia/kernel/xam/user_profile.h"
+
+#include "xenia/kernel/XLiveAPI.h"
+
+using namespace xe::string_util;
 
 namespace xe {
 namespace kernel {
 namespace xam {
 
-std::wstring UserProfile::path() const {
-  if (!profile_path_.empty()) {
-    return profile_path_;
-  }
+// cpptoml parses uint64_t as int64_t, but XUIDs are uint64_t therefore we must
+// store XUIDs as hex strings to get around this issue.
+DEFINE_string(user_0_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
+              "XUID for user 0", "User");
+DEFINE_string(user_1_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
+              "XUID for user 1", "User");
+DEFINE_string(user_2_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
+              "XUID for user 2", "User");
+DEFINE_string(user_3_xuid, to_hex_string(UserProfile::GenerateOnlineXUID()),
+              "XUID for user 3", "User");
 
-  return base_path_;
-}
+DEFINE_string(user_0_name, UserProfile::GenerateGamertag(user_0_xuid),
+              "Gamertag for user 0. 15 characters max.", "User");
+DEFINE_string(user_1_name, UserProfile::GenerateGamertag(user_1_xuid),
+              "Gamertag for user 1. 15 characters max.", "User");
+DEFINE_string(user_2_name, UserProfile::GenerateGamertag(user_2_xuid),
+              "Gamertag for user 2. 15 characters max.", "User");
+DEFINE_string(user_3_name, UserProfile::GenerateGamertag(user_3_xuid),
+              "Gamertag for user 3. 15 characters max.", "User");
+
+constexpr uint32_t kDashboardID = 0xFFFE07D1;
 
 UserProfile::UserProfile(uint8_t index) {
   // 58410A1F checks the user XUID against a mask of 0x00C0000000000000 (3<<54),
   // if non-zero, it prevents the user from playing the game.
   // "You do not have permissions to perform this operation."
-  xuid_ = 0xB13EBABEBABEBABE + index;
-  name_ = "User";
-  if (index) {
-    name_ = "User_" + std::to_string(index);
+  // xuid_ = 0xB13EBABEBABEBABE + index;
+  // name_ = "User";
+  // if (index) {
+  //  name_ = "User_" + std::to_string(index);
+  //}
+
+  index_ = index;
+
+  switch (index) {
+    case 0: {
+      // If XUID is empty generate another one.
+      if (cvars::user_0_xuid.empty()) {
+        OVERRIDE_string(user_0_xuid,
+                        to_hex_string(UserProfile::GenerateOnlineXUID()));
+      }
+
+      if (cvars::user_0_name.empty()) {
+        OVERRIDE_string(user_0_name,
+                        UserProfile::GenerateGamertag(cvars::user_0_xuid));
+      }
+
+      if (cvars::user_0_name.length() > 15) {
+        OVERRIDE_string(user_0_name, cvars::user_0_name.substr(0, 15));
+      }
+
+      xuid_ =
+          string_util::from_string<uint64_t>(cvars::user_0_xuid.c_str(), true);
+      name_ = cvars::user_0_name;
+
+      if (!IsXUIDValid()) {
+        XELOGI("User 0: {} has an invalid XUID of {}", name_,
+               cvars::user_0_xuid);
+      }
+      break;
+    }
+    case 1: {
+      if (cvars::user_1_xuid.empty()) {
+        OVERRIDE_string(user_1_xuid,
+                        to_hex_string(UserProfile::GenerateOnlineXUID()));
+      }
+
+      if (cvars::user_1_name.empty()) {
+        OVERRIDE_string(user_1_name,
+                        UserProfile::GenerateGamertag(cvars::user_1_xuid));
+      }
+
+      if (cvars::user_1_name.length() > 15) {
+        OVERRIDE_string(user_1_name, cvars::user_1_name.substr(0, 15));
+      }
+
+      xuid_ =
+          string_util::from_string<uint64_t>(cvars::user_1_xuid.c_str(), true);
+      name_ = cvars::user_1_name;
+
+      if (!IsXUIDValid()) {
+        XELOGI("User 1: {} has an invalid XUID of {}", name_,
+               cvars::user_1_xuid);
+      }
+      break;
+    }
+    case 2: {
+      if (cvars::user_2_xuid.empty()) {
+        OVERRIDE_string(user_2_xuid,
+                        to_hex_string(UserProfile::GenerateOnlineXUID()));
+      }
+
+      if (cvars::user_2_name.empty()) {
+        OVERRIDE_string(user_2_name,
+                        UserProfile::GenerateGamertag(cvars::user_2_xuid));
+      }
+
+      if (cvars::user_2_name.length() > 15) {
+        OVERRIDE_string(user_2_name, cvars::user_2_name.substr(0, 15));
+      }
+
+      xuid_ =
+          string_util::from_string<uint64_t>(cvars::user_2_xuid.c_str(), true);
+      name_ = cvars::user_2_name;
+
+      if (!IsXUIDValid()) {
+        XELOGI("User 2: {} has an invalid XUID of {}", name_,
+               cvars::user_2_xuid);
+      }
+      break;
+    }
+    case 3: {
+      if (cvars::user_3_xuid.empty()) {
+        OVERRIDE_string(user_3_xuid,
+                        to_hex_string(UserProfile::GenerateOnlineXUID()));
+      }
+
+      if (cvars::user_3_name.empty()) {
+        OVERRIDE_string(user_3_name,
+                        UserProfile::GenerateGamertag(cvars::user_3_xuid));
+      }
+
+      if (cvars::user_3_name.length() > 15) {
+        OVERRIDE_string(user_3_name, cvars::user_3_name.substr(0, 15));
+      }
+
+      xuid_ =
+          string_util::from_string<uint64_t>(cvars::user_3_xuid.c_str(), true);
+      name_ = cvars::user_3_name;
+
+      if (!IsXUIDValid()) {
+        XELOGI("User 3: {} has an invalid XUID of {}", name_,
+               cvars::user_3_xuid);
+      }
+      break;
+    }
   }
 
   // https://cs.rin.ru/forum/viewtopic.php?f=38&t=60668&hilit=gfwl+live&start=195
@@ -87,27 +215,19 @@ UserProfile::UserProfile(uint8_t index) {
   AddSetting(std::make_unique<UserSetting>(0x10040039, 0));
 
   // XPROFILE_GAMERCARD_MOTTO
-  AddSetting(std::make_unique<UserSetting>(0x402C0011, u"Bork"));
+  AddSetting(std::make_unique<UserSetting>(0x402C0011, u""));
   // XPROFILE_GAMERCARD_PICTURE_KEY
   AddSetting(
       std::make_unique<UserSetting>(0x4064000F, u"gamercard_picture_key"));
   // XPROFILE_GAMERCARD_REP
   AddSetting(std::make_unique<UserSetting>(0x5004000B, 0.0f));
-  // XPROFILE_AVATAR_INFO
-  AddSetting(std::make_unique<UserSetting>(0x63E80044, 0));
+
   // XPROFILE_TITLE_SPECIFIC1
   AddSetting(std::make_unique<UserSetting>(0x63E83FFF, std::vector<uint8_t>()));
   // XPROFILE_TITLE_SPECIFIC2
   AddSetting(std::make_unique<UserSetting>(0x63E83FFE, std::vector<uint8_t>()));
   // XPROFILE_TITLE_SPECIFIC3
   AddSetting(std::make_unique<UserSetting>(0x63E83FFD, std::vector<uint8_t>()));
-
-  // XPROFILE_LAST_LIVE_SIGNIN 
-  AddSetting(std::make_unique<UserSetting>(0x7008004F, 0));
-  // XPROFILE_UNK_61180050
-  AddSetting(std::make_unique<UserSetting>(0x61180050, 0));
-  // XPROFILE_TENURE_LEVEL
-  AddSetting(std::make_unique<UserSetting>(0x10040047, 0xC));
 }
 
 void UserProfile::AddSetting(std::unique_ptr<UserSetting> setting) {

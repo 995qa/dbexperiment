@@ -39,6 +39,7 @@
 #include "xenia/gpu/graphics_system.h"
 #include "xenia/hid/input_driver.h"
 #include "xenia/hid/input_system.h"
+#include "xenia/kernel/XLiveAPI.h"
 #include "xenia/kernel/kernel_state.h"
 #include "xenia/kernel/user_module.h"
 #include "xenia/kernel/util/gameinfo_utils.h"
@@ -120,6 +121,7 @@ Emulator::Emulator(const std::filesystem::path& command_line,
       kernel_state_(),
       main_thread_(),
       title_id_(std::nullopt),
+      title_xlast_(),
       paused_(false),
       restoring_(false),
       restore_fence_() {
@@ -764,6 +766,14 @@ X_STATUS Emulator::CreateZarchivePackage(
   return X_STATUS_SUCCESS;
 }
 
+void Emulator::DumpXLast() {
+  if (title_xlast_) {
+    const std::string title_ver =
+        title_version().empty() ? "" : " - " + title_version();
+    title_xlast_->Dump(fmt::format("{:08X}{}", title_id(), title_ver));
+  }
+}
+
 void Emulator::Pause() {
   if (paused_) {
     return;
@@ -1024,6 +1034,8 @@ bool Emulator::ExceptionCallback(Exception* ex) {
       xe::ui::ImGuiDialog::ShowMessageBox(imgui_drawer_, "Uh-oh!", crash_dlg);
     });
   }
+
+  xe::kernel::XLiveAPI::DeleteAllSessionsByMac();
 
   // Now suspend ourself (we should be a guest thread).
   current_thread->Suspend(nullptr);
@@ -1316,6 +1328,13 @@ X_STATUS Emulator::CompleteLaunch(const std::filesystem::path& path,
       }
       XELOGI("-------------------- CONTEXTS --------------------\n{}",
              table.str());
+
+      uint32_t compressed_size, decompressed_size = 0;
+      const uint8_t* xlast_ptr =
+          db.ReadXLast(compressed_size, decompressed_size);
+
+      title_xlast_ = std::make_unique<kernel::util::XLast>(
+          xlast_ptr, compressed_size, decompressed_size);
 
       auto icon_block = db.icon();
       if (icon_block) {

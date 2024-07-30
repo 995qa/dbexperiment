@@ -10,7 +10,6 @@
 #include "xenia/kernel/xam/app_manager.h"
 
 #include "xenia/kernel/kernel_state.h"
-#include "xenia/kernel/xam/apps/unknown_f7_app.h"
 #include "xenia/kernel/xam/apps/xam_app.h"
 #include "xenia/kernel/xam/apps/xgi_app.h"
 #include "xenia/kernel/xam/apps/xlivebase_app.h"
@@ -26,7 +25,6 @@ App::App(KernelState* kernel_state, uint32_t app_id)
       app_id_(app_id) {}
 
 void AppManager::RegisterApps(KernelState* kernel_state, AppManager* manager) {
-  manager->RegisterApp(std::make_unique<apps::UnknownF7App>(kernel_state));
   manager->RegisterApp(std::make_unique<apps::XmpApp>(kernel_state));
   manager->RegisterApp(std::make_unique<apps::XgiApp>(kernel_state));
   manager->RegisterApp(std::make_unique<apps::XLiveBaseApp>(kernel_state));
@@ -51,12 +49,38 @@ X_HRESULT AppManager::DispatchMessageSync(uint32_t app_id, uint32_t message,
 
 X_HRESULT AppManager::DispatchMessageAsync(uint32_t app_id, uint32_t message,
                                            uint32_t buffer_ptr,
-                                           uint32_t buffer_length) {
+                                           uint32_t buffer_length,
+                                           uint32_t overlapped_ptr) {
   const auto& it = app_lookup_.find(app_id);
   if (it == app_lookup_.end()) {
     return X_E_NOTFOUND;
   }
-  return it->second->DispatchMessageSync(message, buffer_ptr, buffer_length);
+
+  Memory* memory = it->second->kernel_state_->memory();
+
+  auto buffer_in = memory->SystemHeapAlloc(buffer_length);
+
+  auto hostOldBufferAddr = memory->TranslateVirtual(buffer_ptr);
+  auto hostBufferAddr = memory->TranslateVirtual(buffer_in);
+
+  memcpy(hostBufferAddr, hostOldBufferAddr, buffer_length);
+
+  auto post = [memory, buffer_in]() { memory->SystemHeapFree(buffer_in); };
+
+  auto run = [it, message, buffer_in, buffer_length]() -> X_RESULT {
+    return it->second->DispatchMessageSync(message, buffer_in, buffer_length);
+  };
+
+  if (overlapped_ptr) {
+    it->second->kernel_state_->CompleteOverlappedDeferred(run, overlapped_ptr,
+                                                          nullptr, post);
+    return X_ERROR_IO_PENDING;
+  };
+
+  const X_HRESULT result =
+      DispatchMessageSync(app_id, message, buffer_in, buffer_length);
+  post();
+  return result;
 }
 
 }  // namespace xam

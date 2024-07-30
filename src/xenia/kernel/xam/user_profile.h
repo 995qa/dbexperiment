@@ -12,6 +12,7 @@
 
 #include <map>
 #include <memory>
+#include <random>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -20,143 +21,11 @@
 #include "xenia/kernel/util/xuserdata.h"
 #include "xenia/xbox.h"
 
+DECLARE_bool(offline_mode);
+
 namespace xe {
 namespace kernel {
 namespace xam {
-
-constexpr uint32_t kDashboardID = 0xFFFE07D1;
-
-// https://github.com/jogolden/testdev/blob/master/xkelib/xam/_xamext.h#L68
-enum class XTileType {
-  kAchievement = 0x0,
-  kGameIcon  = 0x1,
-  kGamerTile  = 0x2,
-  kGamerTileSmall = 0x3,
-  kLocalGamerTile = 0x4,
-  kLocalGamerTileSmall = 0x5,
-  kBkgnd = 0x6,
-  kAwardedGamerTile = 0x7,
-  kAwardedGamerTileSmall = 0x8,
-  kGamerTileByImageId = 0x9,
-  kPersonalGamerTile = 0xA,
-  kPersonalGamerTileSmall = 0xB,
-  kGamerTileByKey = 0xC,
-  kAvatarGamerTile = 0xD,
-  kAvatarGamerTileSmall = 0xE,
-  kAvatarFullBody = 0xF
-};
-
-// TODO: find filenames of other tile types that are stored in profile
-static const std::map<XTileType, wchar_t*> kTileFileNames = {
-    {XTileType::kPersonalGamerTile, L"tile_64.png"},
-    {XTileType::kPersonalGamerTileSmall, L"tile_32.png"},
-    {XTileType::kAvatarGamerTile, L"avtr_64.png"},
-    {XTileType::kAvatarGamerTileSmall, L"avtr_32.png"},
-};
-
-#pragma pack(push, 4)
-struct X_XAMACCOUNTINFO {
-  enum AccountReservedFlags {
-    kPasswordProtected = 0x10000000,
-    kLiveEnabled = 0x20000000,
-    kRecovering = 0x40000000,
-    kVersionMask = 0x000000FF
-  };
-
-  enum AccountUserFlags {
-    kPaymentInstrumentCreditCard = 1,
-
-    kCountryMask = 0xFF00,
-    kSubscriptionTierMask = 0xF00000,
-    kLanguageMask = 0x3E000000,
-
-    kParentalControlEnabled = 0x1000000,
-  };
-
-  enum AccountSubscriptionTier {
-    kSubscriptionTierSilver = 3,
-    kSubscriptionTierGold = 6,
-    kSubscriptionTierFamilyGold = 9
-  };
-
-  // already exists inside xdbf.h??
-  enum AccountLanguage {
-    kNoLanguage,
-    kEnglish,
-    kJapanese,
-    kGerman,
-    kFrench,
-    kSpanish,
-    kItalian,
-    kKorean,
-    kTChinese,
-    kPortuguese,
-    kSChinese,
-    kPolish,
-    kRussian,
-    kNorwegian = 15
-  };
-
-  enum AccountLiveFlags { kAcctRequiresManagement = 1 };
-
-  xe::be<uint32_t> reserved_flags;
-  xe::be<uint32_t> live_flags;
-  wchar_t gamertag[0x10];
-  xe::be<uint64_t> xuid_online;  // 09....
-  xe::be<uint32_t> cached_user_flags;
-  xe::be<uint32_t> network_id;
-  char passcode[4];
-  char online_domain[0x14];
-  char online_kerberos_realm[0x18];
-  char online_key[0x10];
-  char passport_membername[0x72];
-  char passport_password[0x20];
-  char owner_passport_membername[0x72];
-
-  bool IsPasscodeEnabled() {
-    return (bool)(reserved_flags & AccountReservedFlags::kPasswordProtected);
-  }
-
-  bool IsLiveEnabled() {
-    return (bool)(reserved_flags & AccountReservedFlags::kLiveEnabled);
-  }
-
-  bool IsRecovering() {
-    return (bool)(reserved_flags & AccountReservedFlags::kRecovering);
-  }
-
-  bool IsPaymentInstrumentCreditCard() {
-    return (bool)(cached_user_flags &
-                  AccountUserFlags::kPaymentInstrumentCreditCard);
-  }
-
-  bool IsParentalControlled() {
-    return (bool)(cached_user_flags &
-                  AccountUserFlags::kParentalControlEnabled);
-  }
-
-  bool IsXUIDOffline() { return ((xuid_online >> 60) & 0xF) == 0xE; }
-  bool IsXUIDOnline() { return ((xuid_online >> 48) & 0xFFFF) == 0x9; }
-  bool IsXUIDValid() { return IsXUIDOffline() != IsXUIDOnline(); }
-  bool IsTeamXUID() {
-    return (xuid_online & 0xFF00000000000140) == 0xFE00000000000100;
-  }
-
-  uint32_t GetCountry() { return (cached_user_flags & kCountryMask) >> 8; }
-
-  AccountSubscriptionTier GetSubscriptionTier() {
-    return (AccountSubscriptionTier)(
-        (cached_user_flags & kSubscriptionTierMask) >> 20);
-  }
-
-  AccountLanguage GetLanguage() {
-    return (AccountLanguage)((cached_user_flags & kLanguageMask) >> 25);
-  }
-
-  std::string GetGamertagString() const;
-};
-static_assert_size(X_XAMACCOUNTINFO, 0x17C);
-#pragma pack(pop)
 
 constexpr uint32_t kMaxSettingSize = 0x03E8;
 
@@ -288,10 +157,57 @@ class UserProfile {
  public:
   UserProfile(uint8_t index);
 
+  static uint64_t GenerateXUIDMask(uint8_t randomized_bits = 8) {
+    if (randomized_bits > 8) {
+      randomized_bits = 8;
+    }
+
+    std::random_device rnd;
+    std::mt19937_64 gen(rnd());
+
+    uint64_t mask = 0;
+
+    std::uniform_int_distribution<int> dist(0x00, 0xFF);
+
+    for (uint8_t bits = 0; bits < randomized_bits; bits++) {
+      mask = (mask << 8) | dist(gen);
+    }
+
+    return mask;
+  }
+
+  static uint64_t GenerateOfflineXUID() {
+    return (0xEULL << 60) | (GenerateXUIDMask(8) & 0x0FFFFFFFFFFFFFFFULL);
+  }
+
+  static uint64_t GenerateOnlineXUID() {
+    return (0x9ULL << 48) | (GenerateXUIDMask(6) & 0x0000FFFFFFFFFFFFULL);
+  }
+
+  static std::string GenerateGamertag(const std::string& xuid) {
+    std::string suffix = xuid.substr(xuid.size() - 4);
+
+    uint16_t value = string_util::from_string<uint16_t>(suffix.c_str(), true);
+
+    return "XeniaUser" + std::to_string(value);
+  }
+
+  bool IsXUIDOffline() { return ((xuid_ >> 60) & 0xF) == 0xE; }
+  bool IsXUIDOnline() { return ((xuid_ >> 48) & 0xFFFF) == 0x9; }
+  bool IsXUIDValid() { return IsXUIDOffline() != IsXUIDOnline(); }
+
   uint64_t xuid() const { return xuid_; }
-  std::wstring path() const;
+  uint32_t index() const { return index_; }
   std::string name() const { return name_; }
-  uint32_t signin_state() const { return 1; }
+  uint32_t signin_state() const {
+    if (cvars::offline_mode) {
+      // Signed in Locally
+      return 1;
+    } else {
+      // Signed in Online
+      return 2;
+    }
+  }
   uint32_t type() const { return 1 | 2; /* local | online profile? */ }
 
   void AddSetting(std::unique_ptr<UserSetting> setting);
@@ -301,8 +217,7 @@ class UserProfile {
 
  private:
   uint64_t xuid_;
-  std::wstring profile_path_;
-  std::wstring base_path_;
+  uint32_t index_;
   std::string name_;
   std::vector<std::unique_ptr<UserSetting>> setting_list_;
   std::unordered_map<uint32_t, UserSetting*> settings_;
