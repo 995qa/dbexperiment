@@ -15,6 +15,7 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <numeric>
 
 #include "xenia/base/byte_stream.h"
 #include "xenia/kernel/util/property.h"
@@ -159,6 +160,8 @@ class UserProfile {
   std::string name() const { return account_info_.GetGamertagString(); }
   uint32_t signin_state() const { return 1; }
   uint32_t type() const { return 1 | 2; /* local | online profile? */ }
+
+  uint32_t GetCachedFlags() const { return account_info_.GetCachedFlags(); };
 
   void AddSetting(std::unique_ptr<UserSetting> setting);
   UserSetting* GetSetting(uint32_t setting_id);

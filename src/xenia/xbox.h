@@ -128,6 +128,13 @@ typedef uint32_t X_HRESULT;
 #define X_E_NOTFOUND                            X_HRESULT_FROM_WIN32(X_ERROR_NOT_FOUND)
 #define X_E_NO_SUCH_USER                        X_HRESULT_FROM_WIN32(X_ERROR_NO_SUCH_USER)
 
+#define X_USER_LOGON_SIGNOUT        0x23
+#define X_USER_LOGON_SIGNOUT_2      0x48    // Blades
+#define X_USER_LOGON_SIGNOUT_3      0x13    // Testing Network
+#define X_USER_LOGON_SIGNIN         0x424
+#define X_USER_LOGON_SIGNIN_2       0x25    // NXE
+#define X_USER_LOGON_SIGNIN_3       0x14    // Blades OOBE profile creation
+
 //IOCTL_, used by NtDeviceIoControlFile
 constexpr uint32_t X_IOCTL_DISK_GET_DRIVE_GEOMETRY = 0x70000;
 constexpr uint32_t X_IOCTL_DISK_GET_PARTITION_INFO = 0x74004;
@@ -540,6 +547,47 @@ const static std::map<XContentType, std::string> XContentTypeMap = {
     {XContentType::kCommunityGame, "Community Game"},
 };
 
+/* Leave here for future reference
+
+typedef enum {
+        XDASHLAUNCHDATA_COMMAND_DEFAULT = 0, // 14719
+        XDASHLAUNCHDATA_COMMAND_SIGNUP = 1,
+        XDASHLAUNCHDATA_COMMAND_NETWORKTROUBLESHOOTER = 2,
+        XDASHLAUNCHDATA_COMMAND_ARCADE = 3,
+        XDASHLAUNCHDATA_COMMAND_MEMORY = 4,
+        // XDASHLAUNCHDATA_COMMAND_ = 5,
+        XDASHLAUNCHDATA_COMMAND_MUSICPLAYER = 6, // 14719
+        XDASHLAUNCHDATA_COMMAND_PLAYDVD = 7, // 14719
+        XDASHLAUNCHDATA_COMMAND_MEDIA_CENTER = 8, // 14719
+        XDASHLAUNCHDATA_COMMAND_MEDIANETWORKTROUBLESHOOTER = 9,
+        XDASHLAUNCHDATA_COMMAND_ACCOUNTMANAGE_HOME = 10,
+        XDASHLAUNCHDATA_COMMAND_ACCOUNTMANAGE_PRIVACY = 11,
+        XDASHLAUNCHDATA_COMMAND_ACCOUNTMANAGE_ACCEPTTOU = 12,
+        XDASHLAUNCHDATA_COMMAND_ACCOUNTMANAGE_BILLING = 13,
+        XDASHLAUNCHDATA_COMMAND_GAMES_DEMOS = 14,
+        XDASHLAUNCHDATA_COMMAND_GAMES_TRAILERS = 15,
+        XDASHLAUNCHDATA_COMMAND_RETURNFROMENTRYPOINT_MUSIC = 16,
+        XDASHLAUNCHDATA_COMMAND_MARKETPLACE_TILES = 17,
+        XDASHLAUNCHDATA_COMMAND_SETTINGS = 18,
+        XDASHLAUNCHDATA_COMMAND_RETURNFROMENTRYPOINT_GAMES = 19,
+        XDASHLAUNCHDATA_COMMAND_FAMILY_SETTINGS = 20, // 14719
+        XDASHLAUNCHDATA_COMMAND_RETURNFROMENTRYPOINT_SYSTEM = 21,
+        XDASHLAUNCHDATA_COMMAND_OOBE_WELCOME = 22,
+        XDASHLAUNCHDATA_COMMAND_GAMES_ARCADE = 23,
+        // XDASHLAUNCHDATA_COMMAND_ = , // 24-38
+        XDASHLAUNCHDATA_COMMAND_VIDEOPLAYER = 39, // 14719
+        XDASHLAUNCHDATA_COMMAND_PICTURE_VIEWER = 44, // 14719
+        XDASHLAUNCHDATA_COMMAND_SYSTEM_SETTINGS = 47, // 14719
+} XDASHLAUNCHDATA_COMMAND;
+
+typedef struct _XDASHLAUNCHDATA {
+        DWORD dwVersion; // 0x0 sz:0x4
+        DWORD dwCommand; // 0x4 sz:0x4
+        DWORD dwUserIndex; // 0x8 sz:0x4
+        BYTE Reserved[0x3F0]; // 0xC sz:0x3F0
+} XDASHLAUNCHDATA, *PXDASHLAUNCHDATA; // size 1020
+C_ASSERT(sizeof(XDASHLAUNCHDATA) == 0x3FC);*/
+
 enum class XDeploymentType : uint32_t {
   kOpticalDisc = 0,
   kHardDrive = 1,  // Like extracted?
@@ -597,6 +645,8 @@ struct X_XAMACCOUNTINFO {
     return static_cast<bool>(reserved_flags &
                              AccountReservedFlags::kLiveEnabled);
   }
+
+  uint32_t GetCachedFlags() const { return cached_user_flags; };
 
   bool IsXUIDOffline() { return ((xuid_online >> 60) & 0xF) == 0xE; }
   bool IsXUIDOnline() { return ((xuid_online >> 48) & 0xFFFF) == 0x9; }
